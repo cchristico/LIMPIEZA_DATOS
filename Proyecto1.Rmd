@@ -1,0 +1,160 @@
+---
+title: "Proyecto"
+author: "Christian Castillo"
+date: "24/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+![](img/portada.png)
+
+# Ejercicio
+
+## 1. Instalación librerias
+
+<p> 
+Se instalan las sigueitnes librerías
+</p>
+```{r}
+# Instalar Librerias
+library(knitrBootstrap) # archivo css
+library(tidyverse) # manipulación de datos
+library(readxl) # lectura y crga de archivos excel
+library(GGally) # graficos (matriz) analisis exploratorio
+library(janitor) # limpieza de datos
+library(naniar) # visualizacion y tratamiento de datos perdidos
+library(DataExplorer)
+library(visdat) # visualizaciones de datos exploratorios preliminares 
+library(devtools)
+#devtools::install_github("XanderHorn/autoEDA")
+library(autoEDA)
+library(tidyverse)
+library(FactoMineR) 
+library(factoextra)
+```
+
+## 2. Carga de datos
+
+Uso de la base __Rolling Sales Data__, esta base contiene información de ventas del departametno de Finanzas de Estados Unidos.
+
+```{r}
+brooklyn <- read_excel("data/rollingsales_brooklyn.xls", skip = 4)
+head(brooklyn,10)
+```
+
+## 3. Exploracion de datos
+
+```{r}
+tab1 <- introduce(brooklyn) %>% select(-all_missing_columns, -total_missing_values,
+                           -complete_rows, 
+                           -memory_usage) %>% 
+                    select(Filas=rows, Columnas=columns, 
+                           `Columnas Caracter`=discrete_columns,
+                           `Columnas Numéricas`=continuous_columns,
+                           `Observaciones Disponibles`= total_observations)
+
+head(tab1)
+
+```
+
+De la exploración se puede observar que hay __10__ columnas con valores categóricos y numéricos respectivamente.
+Adicional existe una colmna con valores perdidos. Todo esto en una base de __404124__ observaciones
+
+### 3.1 Gráficos
+```{r}
+tab2 <- plot_missing(brooklyn)
+```
+Se observa que la variable __EASE-MENT__ es una columna con valores total mente faltantes, esta columna puede ser omitida del analisis.
+
+```{r}
+brooklyn %>% select(where(is.numeric)) %>% ggpairs()
+```
+
+## 4. Limpieza de Datos
+
+```{r}
+
+# Limpieza de nombres
+NOM <- brooklyn %>% clean_names(case = "all_caps")
+
+# Vistazo a la base final
+NOM %>% glimpse()
+
+# Descripción del tipo de variables
+NOM %>% vis_dat(warn_large_data = F)
+
+# Datos perdidos
+NOM %>% vis_miss(warn_large_data = F)
+
+# Eliminación de variables perdidas
+NOM <- NOM %>% 
+  select(-EASE_MENT)
+
+```
+
+## 5. Analisis Patrones
+
+```{r}
+
+# Correlaciones entre variables
+NOM %>% 
+  select(where(is.numeric)) %>% vis_cor()
+
+# Patrones en datos perdidos
+NOM %>% gg_miss_upset()
+
+
+```
+
+## 6. Transponer Variables
+
+```{r}
+
+# Transformación columnas a filas
+NOM %>% 
+  group_by(NEIGHBORHOOD) %>% 
+  summarise(TOTAL_UNITS = sum(TOTAL_UNITS, na.rm = T),
+            RESIDENTIAL_UNITS = sum(RESIDENTIAL_UNITS, na.rm = T),
+            COMMERCIAL_UNITS = sum(COMMERCIAL_UNITS, na.rm = T)) %>% 
+  head()
+
+NOM %>% 
+  group_by(NEIGHBORHOOD) %>% 
+  summarise(TOTAL_UNITS = sum(TOTAL_UNITS, na.rm = T),
+            RESIDENTIAL_UNITS = sum(RESIDENTIAL_UNITS, na.rm = T),
+            COMMERCIAL_UNITS = sum(COMMERCIAL_UNITS, na.rm = T)) %>% 
+  pivot_longer(cols = -c(NEIGHBORHOOD), names_to = "UNIT_TYPE", values_to = "NUMBER_UNITS") %>% 
+  head()
+
+# Transformación filas a columnas
+NOM %>% 
+  group_by(NEIGHBORHOOD) %>% 
+  summarise(TOTAL_UNITS = sum(TOTAL_UNITS, na.rm = T),
+            RESIDENTIAL_UNITS = sum(RESIDENTIAL_UNITS, na.rm = T),
+            COMMERCIAL_UNITS = sum(COMMERCIAL_UNITS, na.rm = T)) %>% 
+  pivot_longer(cols = -c(NEIGHBORHOOD), names_to = "UNIT_TYPE", values_to = "NUMBER_UNITS") %>% 
+  pivot_wider(names_from = c(UNIT_TYPE), values_from = c(NUMBER_UNITS), values_fill = 0) %>% 
+  head()
+
+```
+
+## 7. Reducción de columnas
+
+```{r}
+pca_res <- PCA(NOM %>% select(where(is.numeric)), scale.unit = T)
+pca_res %>% fviz_screeplot()
+pca_res %>% fviz_pca_biplot()
+
+pca_res = PCA(NOM %>% 
+                slice(-43798) %>% 
+                select(where(is.numeric)), scale.unit = T)
+pca_res %>% fviz_screeplot()
+pca_res %>% fviz_pca_biplot()
+```
+
